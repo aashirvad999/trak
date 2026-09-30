@@ -44,7 +44,7 @@ const INITIAL_BLOCKS: SignalingBlock[] = [
   { id: 'DN-BLK-09', line: 'DOWN', startKm: 48, endKm: 0, aspect: 'GREEN', occupiedByTrainId: null, hasTSR: false, isSignalFaulty: false },
 ];
 
-// Initial 4 Active Trains
+// Initial Active Trains
 const INITIAL_TRAINS: Train[] = [
   {
     id: '12004',
@@ -61,6 +61,7 @@ const INITIAL_TRAINS: Train[] = [
     scheduledArrival: '16:40',
     baseETA: '16:40',
     dynamicETA: '16:40',
+    delaySeconds: 0,
     rawDelayMins: 0,
     slackAbsorbedMins: 0,
     netDelayMins: 0,
@@ -76,19 +77,20 @@ const INITIAL_TRAINS: Train[] = [
     line: 'UP',
     priority: 1,
     maxTargetSpeedKmH: 120,
-    currentSpeedKmH: 104,
-    positionKm: 85,
-    currentBlockId: 'UP-BLK-02',
-    signalAspect: 'YELLOW',
+    currentSpeedKmH: 115,
+    positionKm: 312,
+    currentBlockId: 'UP-BLK-07',
+    signalAspect: 'GREEN',
     scheduledArrival: '17:15',
     baseETA: '17:15',
-    dynamicETA: '17:19',
-    rawDelayMins: 16,
-    slackAbsorbedMins: 12,
-    netDelayMins: 4,
-    causalTag: 'ALJN approach caution aspect',
+    dynamicETA: '17:15',
+    delaySeconds: 0,
+    rawDelayMins: 0,
+    slackAbsorbedMins: 0,
+    netDelayMins: 0,
+    causalTag: 'Approaching SW-12 single line bottleneck',
     colorHex: '#f59e0b',
-    status: 'CAUTION',
+    status: 'RUNNING',
   },
   {
     id: '12560',
@@ -98,13 +100,14 @@ const INITIAL_TRAINS: Train[] = [
     line: 'DOWN',
     priority: 2,
     maxTargetSpeedKmH: 110,
-    currentSpeedKmH: 118,
+    currentSpeedKmH: 110,
     positionKm: 280,
     currentBlockId: 'DN-BLK-04',
     signalAspect: 'GREEN',
     scheduledArrival: '18:05',
     baseETA: '18:05',
     dynamicETA: '18:05',
+    delaySeconds: 0,
     rawDelayMins: 0,
     slackAbsorbedMins: 0,
     netDelayMins: 0,
@@ -120,17 +123,18 @@ const INITIAL_TRAINS: Train[] = [
     line: 'UP',
     priority: 3,
     maxTargetSpeedKmH: 60,
-    currentSpeedKmH: 58,
-    positionKm: 25,
-    currentBlockId: 'UP-BLK-01',
+    currentSpeedKmH: 55,
+    positionKm: 308,
+    currentBlockId: 'UP-BLK-07',
     signalAspect: 'GREEN',
     scheduledArrival: '20:30',
     baseETA: '20:30',
-    dynamicETA: '20:48',
-    rawDelayMins: 30,
-    slackAbsorbedMins: 12,
-    netDelayMins: 18,
-    causalTag: 'Loop regulation for Vande Bharat overtake',
+    dynamicETA: '20:30',
+    delaySeconds: 0,
+    rawDelayMins: 0,
+    slackAbsorbedMins: 0,
+    netDelayMins: 0,
+    causalTag: 'Track 2 Slow Line — SW-12 approach',
     colorHex: '#a1a1aa',
     status: 'RUNNING',
   },
@@ -144,12 +148,12 @@ export default function Page() {
 
   // Incident State
   const [incidents, setIncidents] = useState<IncidentState>({
+    scenarioPreset: 'NORMAL',
     faultyBlockId: null,
     forcedHaltTrainId: null,
     tsrActive: false,
   });
 
-  // Use a Ref to ensure the interval closure always sees latest incidents without recreating the timer
   const incidentsRef = useRef(incidents);
   useEffect(() => {
     incidentsRef.current = incidents;
@@ -189,7 +193,7 @@ export default function Page() {
     setIsMuted(muted);
   };
 
-  // Deterministic Telemetry Physics Loop (interval created ONCE)
+  // Deterministic Telemetry Physics Loop (runs every 1.5s)
   useEffect(() => {
     const timer = setInterval(() => {
       if (isPausedRef.current) return;
@@ -229,40 +233,89 @@ export default function Page() {
   const handleApplyScenario = (preset: ScenarioPreset) => {
     setScenario(preset);
 
-    if (preset === 'SIGNAL_FAIL') {
-      handleToggleFaultyBlock(3); // Block 3: ALJN-TDL (130-205 km)
-      setBlocks((prev) =>
-        prev.map((b) => (b.id === 'UP-BLK-03' ? { ...b, aspect: 'RED', isSignalFaulty: true } : b))
+    if (preset === 'CONVERGENCE_CONFLICT') {
+      setIncidents({
+        scenarioPreset: 'CONVERGENCE_CONFLICT',
+        faultyBlockId: null,
+        forcedHaltTrainId: null,
+        tsrActive: false,
+      });
+
+      // Reposition trains at the SW-12 junction merge threshold
+      setTrains((prev) =>
+        prev.map((t) => {
+          if (t.number === '12302') {
+            return { ...t, positionKm: 312, currentSpeedKmH: 115, status: 'RUNNING', signalAspect: 'GREEN' };
+          }
+          if (t.number.includes('BOXN')) {
+            return { ...t, positionKm: 308, currentSpeedKmH: 55, status: 'RUNNING', signalAspect: 'YELLOW' };
+          }
+          return t;
+        })
       );
+
       setActiveAdvisory({
-        id: 'adv-01',
-        trainId: '12004',
+        id: 'adv-conv-01',
+        trainId: 'BOXN-9024',
         actionText:
-          'Divert BOXN-9024 freight to ALJN Loop Line 3 with 15 km/h control to clear main UP line for 12004 Vande Bharat. Priority gain: +14m recovery.',
-        impactMinutes: 14,
-        type: 'DIVERT_LOOP',
+          'Interlocking Precedence Halt: Hold BOXN Freight at SW-12 outer home signal (km 320) to grant 12302 Rajdhani clear passage onto single-line bottleneck. Saved priority delay: +12m.',
+        impactMinutes: 12,
+        type: 'OVERTAKE_PRIORITY',
         applied: false,
       });
-    } else if (preset === 'TSR') {
-      setIncidents((prev) => ({ ...prev, tsrActive: true }));
-      setBlocks((prev) =>
-        prev.map((b) =>
-          b.id === 'UP-BLK-05' ? { ...b, aspect: 'YELLOW', hasTSR: true, tsrSpeedLimitKmH: 30 } : b
-        )
+    } else if (preset === 'ENGINE_DEFECT') {
+      setIncidents({
+        scenarioPreset: 'ENGINE_DEFECT',
+        faultyBlockId: 3,
+        forcedHaltTrainId: '12004',
+        tsrActive: false,
+      });
+
+      setTrains((prev) =>
+        prev.map((t) => {
+          if (t.number === '12004') {
+            return { ...t, positionKm: 205, currentSpeedKmH: 0, status: 'HALTED', signalAspect: 'RED' };
+          }
+          if (t.number === '12302') {
+            return { ...t, positionKm: 185, currentSpeedKmH: 35, status: 'CAUTION', signalAspect: 'YELLOW' };
+          }
+          return t;
+        })
       );
+
       setActiveAdvisory({
-        id: 'adv-02',
+        id: 'adv-def-02',
         trainId: '12302',
         actionText:
-          'Regulate freight BOXN at GZB Loop to preserve 120 km/h headway for Rajdhani through TDL restriction zone.',
-        impactMinutes: 8,
+          'Headway Compression Caution: Regulate speed of trailing 12302 Rajdhani to 35 km/h to maintain safe gap behind stalled Vande Bharat (km 205).',
+        impactMinutes: 15,
         type: 'SPEED_HOLD',
         applied: false,
       });
+    } else if (preset === 'SLACK_RECOVERY') {
+      setIncidents({
+        scenarioPreset: 'SLACK_RECOVERY',
+        faultyBlockId: null,
+        forcedHaltTrainId: null,
+        tsrActive: false,
+      });
+
+      setBlocks(INITIAL_BLOCKS);
+
+      setActiveAdvisory({
+        id: 'adv-rec-03',
+        trainId: '12302',
+        actionText:
+          'Timetable Slack Absorption Active: 12m Kanpur terminal recovery allowance actively absorbs accrued line delay. Destination arrival deviation restored to +2m.',
+        impactMinutes: 12,
+        type: 'CLEAR_SIGNAL',
+        applied: true,
+      });
     } else {
       // Normal Reset
-      setIncidents({ faultyBlockId: null, forcedHaltTrainId: null, tsrActive: false });
+      setIncidents({ scenarioPreset: 'NORMAL', faultyBlockId: null, forcedHaltTrainId: null, tsrActive: false });
       setBlocks(INITIAL_BLOCKS);
+      setTrains(INITIAL_TRAINS);
       setActiveAdvisory(null);
     }
   };
@@ -270,9 +323,8 @@ export default function Page() {
   // Apply AI Advisory Action
   const handleApplyAdvisory = (advisory: AdvisoryAction) => {
     setActiveAdvisory({ ...advisory, applied: true });
-    // Reset track to normal clear running with recovered priority!
     setTimeout(() => {
-      handleApplyScenario('NORMAL');
+      handleApplyScenario('SLACK_RECOVERY');
     }, 1200);
   };
 
@@ -310,7 +362,7 @@ export default function Page() {
       <CursorGlow />
 
       <div className="w-full max-w-[1720px] mx-auto flex flex-col gap-5 relative z-10">
-        {/* 1. Header with Train Locomotive SVG Glide Animation */}
+        {/* 1. Header */}
         <Header
           avgVelocityKmH={avgVelocity}
           corridorSaturationPct={84}
@@ -320,7 +372,7 @@ export default function Page() {
           onToggleSound={handleToggleSound}
         />
 
-        {/* 2. Interactive Linear Corridor Track View */}
+        {/* 2. Corridor Track Schematic */}
         <CorridorSchematic
           stations={stations}
           blocks={blocks}
@@ -328,9 +380,10 @@ export default function Page() {
           onSelectBlock={(b) => setSelectedBlock(b)}
           onSelectStation={(stn) => setSelectedStation(stn)}
           onSelectTrain={(t) => setSelectedTrain(t)}
+          scenarioPreset={scenario}
         />
 
-        {/* 3. Operational Dock (Live Headway Table + Jury Scenario Simulator) */}
+        {/* 3. Operational Dock (Headway Table + Scenario Sandbox) */}
         <div className="w-full grid grid-cols-12 gap-5 flex-1">
           <HeadwayTable
             trains={trains}
@@ -354,7 +407,7 @@ export default function Page() {
         </div>
       </div>
 
-      {/* Interactive Telemetry Modal */}
+      {/* Telemetry Modal */}
       <BlockInspectorModal
         selectedBlock={selectedBlock}
         selectedStation={selectedStation}

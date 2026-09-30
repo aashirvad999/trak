@@ -39,21 +39,31 @@ export interface Train {
   scheduledArrival: string; // HH:mm format
   baseETA: string; // Original timetable ETA
   dynamicETA: string; // Dynamic predicted ETA calculated by model
-  rawDelayMins: number; // Delay calculated purely from speed drop
+  delaySeconds: number; // Real-time accumulated delay in seconds
+  rawDelayMins: number; // Delay calculated purely from speed loss over time
   slackAbsorbedMins: number; // Slack subtracted by smart engine
   netDelayMins: number; // Net delay displayed = rawDelay - slackAbsorbed
-  causalTag: string; // Real-time bottleneck attribution e.g. "Trailing BOXN-9024 by 6.2km"
+  causalTag: string; // Real-time bottleneck attribution
   colorHex: string;
   status: 'RUNNING' | 'CAUTION' | 'HALTED' | 'ARRIVED';
 }
 
-export type ScenarioPreset = 'NORMAL' | 'SIGNAL_FAIL' | 'TSR' | 'FREIGHT_OVERTAKE' | 'CUSTOM';
+export type ScenarioPreset = 'NORMAL' | 'CONVERGENCE_CONFLICT' | 'ENGINE_DEFECT' | 'SLACK_RECOVERY';
+
+export interface SwitchPointInfo {
+  id: string; // e.g. "SW-12"
+  positionKm: number; // 320 km
+  isLocked: boolean;
+  heldTrainId?: string;
+  priorityPassTrainId?: string;
+  activeMessage?: string;
+}
 
 export interface AdvisoryAction {
   id: string;
   trainId: string;
   actionText: string;
-  impactMinutes: number; // e.g. -14 mins saved
+  impactMinutes: number;
   type: 'DIVERT_LOOP' | 'OVERTAKE_PRIORITY' | 'CLEAR_SIGNAL' | 'SPEED_HOLD';
   applied: boolean;
 }

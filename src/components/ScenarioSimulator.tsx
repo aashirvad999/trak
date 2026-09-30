@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
 import { ScenarioPreset, AdvisoryAction, Train } from '@/types/railway';
-import { Sliders, Zap, AlertTriangle, CheckCircle, RefreshCw, Sparkles, Play, Pause, ChevronRight } from 'lucide-react';
+import { Sliders, Zap, AlertTriangle, CheckCircle, RefreshCw, Sparkles, Play, Pause, ChevronRight, GitMerge } from 'lucide-react';
 import { railwayAudio } from '@/lib/audio';
 
 interface ScenarioSimulatorProps {
@@ -32,36 +31,33 @@ export default function ScenarioSimulator({
   activeAdvisory,
   onApplyAdvisory,
 }: ScenarioSimulatorProps) {
-  const isSignalFail = currentScenario === 'SIGNAL_FAIL';
-  const isTSR = currentScenario === 'TSR';
-
-  // Calculate max delay among trains to plot dynamic graph curve
-  const maxNetDelay = Math.max(...trains.map((t) => t.netDelayMins), 0);
-  const maxRawDelay = Math.max(...trains.map((t) => t.rawDelayMins), 0);
+  const isConvergence = currentScenario === 'CONVERGENCE_CONFLICT';
+  const isEngineDefect = currentScenario === 'ENGINE_DEFECT';
+  const isSlackRecovery = currentScenario === 'SLACK_RECOVERY';
 
   // Dynamic SVG Points generation based on current scenario
   const getGraphPoints = () => {
-    if (isSignalFail) {
-      // Steep spike at ALJN (KM 130) cascading downstream to CNB
+    if (isConvergence) {
+      // Spike at km 320 (Convergence Point)
       return {
-        line: '0,90 80,88 120,25 180,35 240,48 300,58 400,65',
-        fill: '0,90 80,88 120,25 180,35 240,48 300,58 400,65 400,100 0,100',
+        line: '0,95 100,94 200,90 280,85 320,30 380,50 400,60',
+        fill: '0,95 100,94 200,90 280,85 320,30 380,50 400,60 400,100 0,100',
         stroke: '#f43f5e',
       };
     }
-    if (isTSR) {
-      // Moderate surge starting at TDL (KM 205)
+    if (isEngineDefect) {
+      // Steep surge at Tundla (KM 205) cascading downstream
       return {
-        line: '0,92 100,90 180,85 240,45 300,55 360,65 400,72',
-        fill: '0,92 100,90 180,85 240,45 300,55 360,65 400,72 400,100 0,100',
+        line: '0,92 100,90 205,25 260,45 320,60 380,70 400,75',
+        fill: '0,92 100,90 205,25 260,45 320,60 380,70 400,75 400,100 0,100',
         stroke: '#fbbf24',
       };
     }
-    // Nominal running (flat minimal baseline)
+    // Nominal / Slack Recovery baseline
     return {
       line: '0,95 80,94 150,92 220,93 300,92 360,94 400,95',
       fill: '0,95 80,94 150,92 220,93 300,92 360,94 400,95 400,100 0,100',
-      stroke: '#06b6d4',
+      stroke: '#10b981',
     };
   };
 
@@ -77,75 +73,106 @@ export default function ScenarioSimulator({
               <Sliders className="w-4 h-4" />
             </div>
             <h3 className="font-mono text-xs font-semibold uppercase tracking-wider text-zinc-100">
-              Scenario Simulator (Jury Sandbox)
+              Incident &amp; What-If Sandbox
             </h3>
           </div>
 
           <div className="flex items-center gap-2 font-mono text-[11px]">
             <span
               className={`w-2 h-2 rounded-full ${
-                isSignalFail
+                isConvergence
                   ? 'bg-rose-500 animate-ping'
-                  : isTSR
+                  : isEngineDefect
                   ? 'bg-amber-400 animate-pulse'
                   : 'bg-emerald-400'
               }`}
             />
             <span
               className={`font-semibold ${
-                isSignalFail ? 'text-rose-400' : isTSR ? 'text-amber-400' : 'text-emerald-400'
+                isConvergence ? 'text-rose-400' : isEngineDefect ? 'text-amber-400' : 'text-emerald-400'
               }`}
             >
-              {isSignalFail ? 'Signal Failure' : isTSR ? 'TSR 30 Active' : 'Nominal Clear'}
+              {isConvergence
+                ? 'SW-12 Convergence Conflict'
+                : isEngineDefect
+                ? 'Tundla Stoppage (km 205)'
+                : 'Nominal / Slack Absorbed'}
             </span>
           </div>
         </div>
 
-        {/* 3 Quick Interactive Preset Triggers (Border Highlight Design) */}
-        <div className="grid grid-cols-3 gap-2 p-1.5 bg-void/80 border border-borderzinc/70 rounded-xl mb-4">
+        {/* 3 Practical Operational Scenarios */}
+        <div className="grid grid-cols-1 gap-2 p-1.5 bg-void/80 border border-borderzinc/70 rounded-xl mb-4">
+          {/* SCENARIO A */}
           <button
             onClick={() => {
               railwayAudio.playAlert();
-              onApplyScenario('SIGNAL_FAIL');
+              onApplyScenario('CONVERGENCE_CONFLICT');
             }}
-            className={`py-2 px-2 text-xs font-mono rounded-lg transition-all flex flex-col items-center gap-1 ${
-              isSignalFail
-                ? 'bg-elevated/90 border-2 border-rose-500 text-rose-400 font-bold shadow-[0_0_12px_rgba(244,63,94,0.4)] scale-105'
+            className={`py-2 px-3 text-xs font-mono rounded-lg transition-all flex items-center justify-between ${
+              isConvergence
+                ? 'bg-elevated/90 border-2 border-rose-500 text-rose-300 font-bold shadow-[0_0_12px_rgba(244,63,94,0.4)]'
                 : 'hover:bg-elevated text-zinc-400 hover:text-zinc-200 border border-transparent'
             }`}
           >
-            <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-            <span>Signal Fail (ALJN)</span>
+            <div className="flex items-center gap-2">
+              <GitMerge className="w-4 h-4 text-rose-400" />
+              <div className="flex flex-col items-start text-left">
+                <span className="font-bold text-zinc-100">Simulate Convergence Conflict (km 320)</span>
+                <span className="text-[10px] text-zinc-400 font-normal">Track 2 Freight yields to 12302 Rajdhani at single-line junction</span>
+              </div>
+            </div>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-400 border border-rose-800/60 uppercase shrink-0">
+              Scenario A
+            </span>
           </button>
 
+          {/* SCENARIO B */}
           <button
             onClick={() => {
               railwayAudio.playAlert();
-              onApplyScenario('TSR');
+              onApplyScenario('ENGINE_DEFECT');
             }}
-            className={`py-2 px-2 text-xs font-mono rounded-lg transition-all flex flex-col items-center gap-1 ${
-              isTSR
-                ? 'bg-elevated/90 border-2 border-amber-400 text-amber-300 font-bold shadow-[0_0_12px_rgba(245,158,11,0.4)] scale-105'
+            className={`py-2 px-3 text-xs font-mono rounded-lg transition-all flex items-center justify-between ${
+              isEngineDefect
+                ? 'bg-elevated/90 border-2 border-amber-400 text-amber-300 font-bold shadow-[0_0_12px_rgba(245,158,11,0.4)]'
                 : 'hover:bg-elevated text-zinc-400 hover:text-zinc-200 border border-transparent'
             }`}
           >
-            <Zap className="w-3.5 h-3.5 text-amber-400" />
-            <span>TSR 30 km/h (TDL)</span>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400" />
+              <div className="flex flex-col items-start text-left">
+                <span className="font-bold text-zinc-100">Simulate Engine Defect / Stoppage (Tundla - km 205)</span>
+                <span className="text-[10px] text-zinc-400 font-normal">Cascading headway ripple: Green ➔ Double Yellow ➔ Yellow ➔ Red</span>
+              </div>
+            </div>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-400 border border-amber-800/60 uppercase shrink-0">
+              Scenario B
+            </span>
           </button>
 
+          {/* SCENARIO C */}
           <button
             onClick={() => {
               railwayAudio.playClick();
-              onApplyScenario('NORMAL');
+              onApplyScenario('SLACK_RECOVERY');
             }}
-            className={`py-2 px-2 text-xs font-mono rounded-lg transition-all flex flex-col items-center gap-1 ${
-              currentScenario === 'NORMAL'
-                ? 'bg-elevated/90 border-2 border-emerald-400 text-emerald-300 font-bold shadow-[0_0_12px_rgba(16,185,129,0.4)] scale-105'
+            className={`py-2 px-3 text-xs font-mono rounded-lg transition-all flex items-center justify-between ${
+              isSlackRecovery
+                ? 'bg-elevated/90 border-2 border-emerald-400 text-emerald-300 font-bold shadow-[0_0_12px_rgba(16,185,129,0.4)]'
                 : 'hover:bg-elevated text-zinc-400 hover:text-zinc-200 border border-transparent'
             }`}
           >
-            <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Normal Clear</span>
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-emerald-400" />
+              <div className="flex flex-col items-start text-left">
+                <span className="font-bold text-zinc-100">Clear Block &amp; Absorb Slack</span>
+                <span className="text-[10px] text-zinc-400 font-normal">Restores signals to Green; 12m terminal slack absorbs accumulated delay</span>
+              </div>
+            </div>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 uppercase shrink-0">
+              Scenario C
+            </span>
           </button>
         </div>
 
@@ -153,10 +180,10 @@ export default function ScenarioSimulator({
         <div className="bg-void/50 border border-borderzinc/60 rounded-xl p-3.5 mb-4 space-y-3">
           <div className="flex items-center justify-between font-mono text-xs text-zinc-300">
             <span className="flex items-center gap-1.5">
-              <span>Timetable Buffer Slack:</span>
+              <span>Kanpur Terminal Recovery Slack:</span>
               <strong className="text-emerald-400 font-mono-numbers">{slackBufferMins} mins</strong>
             </span>
-            <span className="text-[10px] text-zinc-500">Subtracted from downstream raw delay</span>
+            <span className="text-[10px] text-zinc-500">Deducted from destination ETA delay</span>
           </div>
 
           <input
@@ -198,7 +225,7 @@ export default function ScenarioSimulator({
                   className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-all ${
                     simSpeedMultiplier === m
                       ? 'bg-elevated text-cyan-400 border border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.4)] font-bold'
-                      : 'bg-void text-zinc-500 hover:text-zinc-300 border border-transparent'
+                      : 'text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
                   {m}x
@@ -208,115 +235,77 @@ export default function ScenarioSimulator({
           </div>
         </div>
 
-        {/* Dynamic Cascading Impact Sparkline SVG Chart */}
-        <div className="bg-void/60 border border-borderzinc/60 rounded-xl p-4 mb-4 relative overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-mono text-zinc-400 flex items-center gap-1.5">
-              <span>Cascading Delay Projection Curve</span>
+        {/* Real-time Delay Accumulation Curve Graph */}
+        <div className="bg-void/60 border border-borderzinc/60 rounded-xl p-3 mb-4">
+          <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-2">
+            <span className="flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Real-Time Delay Accumulation Curve</span>
             </span>
-            <div className="flex items-center gap-3 font-mono text-xs font-mono-numbers">
-              <span className="text-zinc-500 text-[10px]">
-                Raw: <strong className="text-zinc-300">+{maxRawDelay.toFixed(1)}m</strong>
-              </span>
-              <span className={`font-semibold ${maxNetDelay > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                Net: +{maxNetDelay.toFixed(1)} min
-              </span>
-            </div>
+            <span className="text-[10px] text-zinc-500">435 KM Corridor</span>
           </div>
 
-          {/* SVG Trend Graph */}
-          <div className="relative h-24 w-full my-2">
-            <svg
-              className="w-full h-full overflow-visible"
-              viewBox="0 0 400 100"
-              preserveAspectRatio="none"
-            >
+          <div className="relative h-16 w-full overflow-hidden rounded bg-[#0d1117]/80 border border-zinc-800/60 p-1">
+            <svg className="w-full h-full" viewBox="0 0 400 100" preserveAspectRatio="none">
               <defs>
-                <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={points.stroke} stopOpacity="0.35" />
+                <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={points.stroke} stopOpacity="0.4" />
                   <stop offset="100%" stopColor={points.stroke} stopOpacity="0.0" />
                 </linearGradient>
               </defs>
 
-              {/* Reference Grid Lines */}
-              <line x1="0" y1="50" x2="400" y2="50" stroke="#232633" strokeDasharray="3 3" strokeWidth="0.8" />
-              <line x1="0" y1="20" x2="400" y2="20" stroke="#232633" strokeDasharray="2 2" strokeWidth="0.6" />
+              {/* Grid Lines */}
+              <line x1="0" y1="25" x2="400" y2="25" stroke="#1f2433" strokeDasharray="3 3" />
+              <line x1="0" y1="50" x2="400" y2="50" stroke="#1f2433" strokeDasharray="3 3" />
+              <line x1="0" y1="75" x2="400" y2="75" stroke="#1f2433" strokeDasharray="3 3" />
 
-              {/* Fill Gradient Area */}
-              <polygon points={points.fill} fill="url(#trendGradient)" className="transition-all duration-700" />
+              {/* Polygon Area Fill */}
+              <polygon points={points.fill} fill="url(#areaGradient)" />
 
-              {/* Smooth Animated Line */}
-              <polyline
-                points={points.line}
-                fill="none"
-                stroke={points.stroke}
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="transition-all duration-700"
-              />
+              {/* Trend Polyline */}
+              <polyline points={points.line} fill="none" stroke={points.stroke} strokeWidth="2" strokeLinecap="round" />
             </svg>
-          </div>
-
-          <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500 pt-1 border-t border-borderzinc/40">
-            <span>NDLS</span>
-            <span>GZB</span>
-            <span>ALJN</span>
-            <span>TDL</span>
-            <span>ETW</span>
-            <span>CNB</span>
           </div>
         </div>
 
-        {/* AI Resolver Advisory Panel */}
+        {/* Dynamic AI Dispatch Advisory Panel */}
         {activeAdvisory && (
-          <div
-            className={`border p-3.5 rounded-xl flex items-center justify-between text-xs font-mono gap-3 transition-all ${
-              activeAdvisory.applied
-                ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
-                : 'bg-cyan-950/40 border-cyan-800/60 text-cyan-200 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <Sparkles
-                className={`w-4 h-4 shrink-0 ${
-                  activeAdvisory.applied ? 'text-emerald-400' : 'text-cyan-400 animate-pulse'
-                }`}
-              />
-              <div className="flex flex-col">
-                <span className="font-semibold uppercase tracking-wider text-[10px] text-cyan-400">
-                  AI Resolver Operational Advisory
-                </span>
-                <span className="text-zinc-200 text-xs font-sans mt-0.5">
-                  {activeAdvisory.actionText}
-                </span>
-              </div>
+          <div className="bg-cyan-950/40 border border-cyan-800/60 rounded-xl p-3.5 flex items-start gap-3 shadow-lg">
+            <div className="p-1.5 rounded-lg bg-cyan-900/60 text-cyan-400 shrink-0">
+              <Sparkles className="w-4 h-4 animate-pulse" />
             </div>
-
-            <button
-              disabled={activeAdvisory.applied}
-              onClick={() => {
-                railwayAudio.playChime(1046.5, 'sine', 0.08, 0.2);
-                onApplyAdvisory(activeAdvisory);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition shrink-0 flex items-center gap-1 ${
-                activeAdvisory.applied
-                  ? 'bg-emerald-800/80 text-white cursor-default'
-                  : 'bg-cyan-600 hover:bg-cyan-500 text-zinc-950 font-semibold shadow-md'
-              }`}
-            >
-              {activeAdvisory.applied ? (
-                <>
-                  <span>Applied</span>
-                  <CheckCircle className="w-3.5 h-3.5" />
-                </>
-              ) : (
-                <>
-                  <span>Apply Advisory</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </>
-              )}
-            </button>
+            <div className="flex-1">
+              <div className="flex items-center justify-between text-xs font-mono font-semibold text-cyan-200 mb-1">
+                <span>Recommended Dispatch Action</span>
+                <span className="text-emerald-400">{activeAdvisory.impactMinutes} mins saved</span>
+              </div>
+              <p className="text-xs text-zinc-300 leading-relaxed font-sans mb-2">
+                {activeAdvisory.actionText}
+              </p>
+              <button
+                onClick={() => {
+                  railwayAudio.playClick();
+                  onApplyAdvisory(activeAdvisory);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition shrink-0 flex items-center gap-1 ${
+                  activeAdvisory.applied
+                    ? 'bg-emerald-800/80 text-white cursor-default'
+                    : 'bg-cyan-600 hover:bg-cyan-500 text-zinc-950 font-semibold shadow-md'
+                }`}
+              >
+                {activeAdvisory.applied ? (
+                  <>
+                    <span>Applied</span>
+                    <CheckCircle className="w-3.5 h-3.5" />
+                  </>
+                ) : (
+                  <>
+                    <span>Apply Advisory</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
       </div>

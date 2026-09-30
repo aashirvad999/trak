@@ -1,21 +1,52 @@
-import { Train } from '@/types/railway';
+import { Train, ScenarioPreset, SwitchPointInfo } from '@/types/railway';
 
 // Corridor Block Definitions (in km)
 export const CORRIDOR_BLOCKS = [
   { id: 1, name: "NDLS-GZB", startKm: 0, endKm: 25 },
   { id: 2, name: "GZB-ALJN", startKm: 25, endKm: 130 },
-  { id: 3, name: "ALJN-TDL", startKm: 130, endKm: 205 }, // Commonly faulted block
-  { id: 4, name: "TDL-ETW",  startKm: 205, endKm: 315 },
-  { id: 5, name: "ETW-CNB",  startKm: 315, endKm: 435 },
+  { id: 3, name: "ALJN-TDL", startKm: 130, endKm: 205 },
+  { id: 4, name: "TDL-CONVERGE", startKm: 205, endKm: 320 },
+  { id: 5, name: "CONVERGE-CNB", startKm: 320, endKm: 435 }, // Single Common Bottleneck Line
 ];
 
 export interface IncidentState {
-  faultyBlockId: number | null;      // e.g. 3 for ALJN-TDL
-  forcedHaltTrainId: string | null;  // e.g. "12004"
-  tsrActive: boolean;                // Temporary speed restriction
+  scenarioPreset: ScenarioPreset;
+  faultyBlockId: number | null;
+  forcedHaltTrainId: string | null;
+  tsrActive: boolean;
 }
 
-export const MIN_HEADWAY_SAFETY_KM = 30.0;
+export const MIN_HEADWAY_SAFETY_KM = 25.0;
+export const CONVERGENCE_KM = 320.0;
+
+export function getSwitchPointStatus(allTrains: Train[], scenario: ScenarioPreset): SwitchPointInfo {
+  // Check if there is a conflict at SW-12 (km 320)
+  const rajdhani = allTrains.find((t) => t.number === '12302');
+  const freight = allTrains.find((t) => t.number.includes('BOXN') || t.priority === 3);
+
+  const isRajdhaniNearJunction = rajdhani && rajdhani.positionKm >= 300 && rajdhani.positionKm <= 335;
+  const isFreightNearJunction = freight && freight.positionKm >= 295 && freight.positionKm <= 325;
+
+  const isConflictActive = scenario === 'CONVERGENCE_CONFLICT' && (isRajdhaniNearJunction || isFreightNearJunction);
+
+  if (isConflictActive && isFreightNearJunction && isRajdhaniNearJunction && rajdhani.positionKm < 335) {
+    return {
+      id: 'SW-12',
+      positionKm: 320,
+      isLocked: true,
+      heldTrainId: freight?.id,
+      priorityPassTrainId: rajdhani?.id,
+      activeMessage: 'Switch SW-12 Locked: Priority precedence given to 12302 Rajdhani',
+    };
+  }
+
+  return {
+    id: 'SW-12',
+    positionKm: 320,
+    isLocked: false,
+    activeMessage: 'Switch SW-12 Interlocking: Clear',
+  };
+}
 
 export function computeNextTrainState(
   train: Train,
@@ -30,136 +61,129 @@ export function computeNextTrainState(
   let status: 'RUNNING' | 'CAUTION' | 'HALTED' | 'ARRIVED' = 'RUNNING';
   let statusReason = 'Line Clear (Green Aspect)';
   let aspect: 'GREEN' | 'DOUBLE_YELLOW' | 'YELLOW' | 'RED' = 'GREEN';
-  let delayMinutes = train.rawDelayMins;
 
-  // 1. HARD OVERRIDE: Is this specific train explicitly forced on halt?
-  if (incidents.forcedHaltTrainId === train.id) {
-    targetSpeed = 0;
-    statusReason = 'Manual Emergency Halt (Controller Override)';
-  } else {
-    // Find which block the train is currently in
-    const currentBlock = CORRIDOR_BLOCKS.find(
-      (b) => train.positionKm >= b.startKm && train.positionKm < b.endKm
-    );
+  const switchStatus = getSwitchPointStatus(allTrains, incidents.scenarioPreset);
 
-    // 2. HARD OVERRIDE: Is the current block or the IMMEDIATELY approaching block RED?
-    const isInsideFaultyBlock = incidents.faultyBlockId === currentBlock?.id;
-    
-    // Check if approaching the entrance of the faulty block (within 6km of the signal)
-    const faultyBlock = CORRIDOR_BLOCKS.find((b) => b.id === incidents.faultyBlockId);
-    const isApproachingSignal =
-      faultyBlock &&
-      train.positionKm < faultyBlock.startKm &&
-      train.positionKm >= faultyBlock.startKm - 6;
-
-    if (isInsideFaultyBlock || isApproachingSignal) {
-      targetSpeed = 0;
-      statusReason = `Interlock Stop Signal: Red Aspect at Block ${faultyBlock?.name || 'ALJN-TDL'}`;
-    } else {
-      // 3. HEADWAY & MULTI-ASPECT SIGNALING CHECK: Is there a train directly ahead on the same track?
-      const sameTrackTrains = allTrains
-        .filter((t) => t.line === train.line && t.id !== train.id)
-        .sort((a, b) => (train.line === 'UP' ? a.positionKm - b.positionKm : b.positionKm - a.positionKm));
-
-      // Find the closest train ahead
-      const leadTrain = sameTrackTrains.find((t) =>
-        train.line === 'UP' ? t.positionKm > train.positionKm : t.positionKm < train.positionKm
-      );
-
-      const headwayKm = leadTrain ? Math.abs(leadTrain.positionKm - train.positionKm) : 999;
-
-      if (headwayKm <= MIN_HEADWAY_SAFETY_KM) {
-        // Red Aspect: Mandatory Stop before breaching minimum 30.0 km safety distance
+  // 1. SCENARIO A: Convergence Conflict at km 320 Switch SW-12
+  if (incidents.scenarioPreset === 'CONVERGENCE_CONFLICT') {
+    if (train.priority === 3 || train.number.includes('BOXN')) {
+      // Freight train approaching km 320
+      if (switchStatus.isLocked && train.positionKm >= 295 && train.positionKm <= 320) {
         targetSpeed = 0;
-        statusReason = `Halted: Min Safety Gap Enforced (${headwayKm.toFixed(1)}km < ${MIN_HEADWAY_SAFETY_KM}km behind ${leadTrain?.shortName})`;
-      } else if (headwayKm <= 55) {
-        // Yellow Aspect: Restricted speed (35 km/h) & active deceleration
-        targetSpeed = 35;
-        statusReason = `Caution (Yellow): Gradual deceleration trailing ${leadTrain?.shortName} (${headwayKm.toFixed(1)}km gap)`;
-      } else if (headwayKm <= 85) {
-        // Double Yellow Aspect: Advance caution speed (70 km/h)
-        targetSpeed = 70;
-        statusReason = `Advance Caution (Double Yellow): Headway closing on ${leadTrain?.shortName} (${headwayKm.toFixed(1)}km gap)`;
-      } else if (incidents.tsrActive && train.positionKm >= 205 && train.positionKm <= 230) {
-        // Speed restriction zone
-        targetSpeed = 30;
-        statusReason = 'TSR 30 km/h Enforced (Track Maintenance)';
+        statusReason = 'Interlocking Halt: Priority precedence yielded to 12302 Rajdhani at single-line junction';
+        aspect = 'RED';
+      } else if (train.positionKm < 320 && train.positionKm >= 280) {
+        targetSpeed = 45;
+        statusReason = 'Approaching Switch SW-12 Convergence Junction (CNB Single Bottleneck)';
+        aspect = 'YELLOW';
+      }
+    } else if (train.number === '12302') {
+      // High-priority Rajdhani clearing the single-line junction
+      if (train.positionKm >= 305 && train.positionKm <= 335) {
+        targetSpeed = train.maxTargetSpeedKmH;
+        statusReason = 'Single Line Right-of-Way: Express precedence granted through SW-12 turnout';
+        aspect = 'GREEN';
       }
     }
   }
 
-  // 4. SMOOTH GRADUAL DECELERATION / ACCELERATION PHYSICS
+  // 2. SCENARIO B: Engine Defect / Stoppage at Tundla (km 205)
+  if (incidents.scenarioPreset === 'ENGINE_DEFECT') {
+    const leadVandeBharat = allTrains.find((t) => t.number === '12004');
+    if (train.number === '12004') {
+      targetSpeed = 0;
+      statusReason = 'Engine Defect: Stalled consist at Tundla (km 205)';
+      aspect = 'RED';
+    } else if (leadVandeBharat && train.line === leadVandeBharat.line && train.positionKm < leadVandeBharat.positionKm) {
+      const distToLead = leadVandeBharat.positionKm - train.positionKm;
+      if (distToLead <= 12) {
+        targetSpeed = 0;
+        statusReason = 'Headway Interlock: Mandatory Red halt behind stalled consist at km 205';
+        aspect = 'RED';
+      } else if (distToLead <= 30) {
+        targetSpeed = 35;
+        statusReason = `Headway Compression: Operating under Yellow aspect due to stalled consist at km 205 (${distToLead.toFixed(1)}km gap)`;
+        aspect = 'YELLOW';
+      } else if (distToLead <= 60) {
+        targetSpeed = 70;
+        statusReason = `Advance Caution: Closing gap on stalled consist at km 205 (${distToLead.toFixed(1)}km gap)`;
+        aspect = 'DOUBLE_YELLOW';
+      }
+    }
+  }
+
+  // 3. SCENARIO C: Timetable Slack Absorption & Recovery
+  if (incidents.scenarioPreset === 'SLACK_RECOVERY') {
+    targetSpeed = train.maxTargetSpeedKmH;
+    if (train.netDelayMins <= 3 && train.rawDelayMins > 0) {
+      statusReason = `${slackBufferMins}m terminal recovery buffer utilized; arriving with nominal deviation`;
+    }
+  }
+
+  // 4. HARD OVERRIDE / MANUAL FAULT INSPECTION
+  if (incidents.forcedHaltTrainId === train.id) {
+    targetSpeed = 0;
+    statusReason = 'Manual Emergency Halt (Controller Override)';
+  }
+
+  // 5. SMOOTH KINEMATIC ACCELERATION & DECELERATION
   let speed = currentSpeed;
   if (speed > targetSpeed) {
-    // Smooth deceleration step (drops ~18 km/h per 1.5s tick)
-    const decelRate = 18;
+    // Decelerate smoothly (~15 km/h per 1.5s tick)
+    const decelRate = 15;
     speed = Math.max(targetSpeed, speed - decelRate);
-    if (targetSpeed < train.maxTargetSpeedKmH) {
-      delayMinutes += 0.25;
-    }
   } else if (speed < targetSpeed) {
-    // Smooth acceleration step (gains ~8 km/h per tick)
+    // Accelerate smoothly (~8 km/h per 1.5s tick)
     const accelRate = 8;
     speed = Math.min(targetSpeed, speed + accelRate);
   }
 
-  // Set status & signal aspect based on updated smooth speed and target
+  // Derive Status & Aspect
   if (speed === 0) {
     status = 'HALTED';
     aspect = 'RED';
-  } else if (targetSpeed <= 35 || speed <= 45) {
+  } else if (targetSpeed <= 45 || speed <= 45) {
     status = 'CAUTION';
-    aspect = 'YELLOW';
+    aspect = aspect === 'GREEN' ? 'YELLOW' : aspect;
   } else if (targetSpeed <= 75 || speed <= 80) {
     status = 'CAUTION';
-    aspect = 'DOUBLE_YELLOW';
+    aspect = aspect === 'GREEN' ? 'DOUBLE_YELLOW' : aspect;
   } else {
     status = 'RUNNING';
     aspect = 'GREEN';
   }
 
-  // Compute position delta (km = speed * hours)
-  const distanceTravelled = (speed / 3600) * deltaTimeSec * simSpeedMultiplier * 10; // scale factor for visual glide
+  // 6. DYNAMIC DELAY ACCUMULATION ENGINE
+  let delaySec = train.delaySeconds ?? (train.rawDelayMins * 60);
+
+  if (speed < train.maxTargetSpeedKmH) {
+    if (speed === 0) {
+      // Pure halt: accumulate full tick duration as raw delay
+      delaySec += deltaTimeSec * simSpeedMultiplier;
+    } else {
+      // Partial speed loss: accumulate proportional time loss
+      const timeLossRatio = 1 - (speed / train.maxTargetSpeedKmH);
+      delaySec += timeLossRatio * deltaTimeSec * simSpeedMultiplier;
+    }
+  } else if (incidents.scenarioPreset === 'SLACK_RECOVERY' && delaySec > 0) {
+    // When running at max speed in recovery mode, slowly recover raw delay
+    delaySec = Math.max(0, delaySec - deltaTimeSec * simSpeedMultiplier * 0.5);
+  }
+
+  const rawDelayMins = Math.floor(delaySec / 60);
+  const slackAbsorbed = Math.min(rawDelayMins, slackBufferMins);
+  const netDelay = Math.max(0, rawDelayMins - slackAbsorbed);
+  const dynamicETA = addMinutesToTime(train.scheduledArrival, netDelay);
+
+  // Compute position progression
+  const distanceTravelled = (speed / 3600) * deltaTimeSec * simSpeedMultiplier * 8; // Scale factor for visual track glide
   let nextPos = train.positionKm + (train.line === 'UP' ? distanceTravelled : -distanceTravelled);
 
-  // Recalculate lead train position for hard safety position clamping
-  const sameTrackTrains = allTrains
-    .filter((t) => t.line === train.line && t.id !== train.id);
-  const leadTrain = sameTrackTrains.find((t) =>
-    train.line === 'UP' ? t.positionKm > train.positionKm : t.positionKm < train.positionKm
-  );
-
-  // Hard position clamping to ensure minimum safety distance gap is NEVER breached
-  if (leadTrain) {
-    if (train.line === 'UP') {
-      const maxAllowedPos = leadTrain.positionKm - MIN_HEADWAY_SAFETY_KM;
-      if (nextPos > maxAllowedPos) {
-        nextPos = Math.max(train.positionKm, maxAllowedPos);
-      }
-    } else {
-      const minAllowedPos = leadTrain.positionKm + MIN_HEADWAY_SAFETY_KM;
-      if (nextPos < minAllowedPos) {
-        nextPos = Math.min(train.positionKm, minAllowedPos);
-      }
-    }
-  }
-
-  const faultyBlock = CORRIDOR_BLOCKS.find((b) => b.id === incidents.faultyBlockId);
-  // If approaching the red signal boundary, clamp position so it stops right at the signal post
-  if (faultyBlock && train.line === 'UP' && train.positionKm < faultyBlock.startKm && nextPos >= faultyBlock.startKm) {
-    nextPos = faultyBlock.startKm - 0.1; // clamp 100m before the red signal
-  }
-
+  // Position clamping for loop wrap
   if (nextPos > 435) nextPos = 0;
   if (nextPos < 0) nextPos = 435;
 
-  // Timetable Recovery Slack Subtraction
-  const roundedRawDelay = Math.round(delayMinutes);
-  const slackAbsorbed = Math.min(roundedRawDelay, slackBufferMins);
-  const netDelay = Math.max(0, roundedRawDelay - slackAbsorbed);
-  const dynamicETA = addMinutesToTime(train.scheduledArrival, netDelay);
-
-  // Active Block ID
+  // Active Block ID Calculation
   const activeBlockId = `${train.line === 'UP' ? 'UP' : 'DN'}-BLK-0${Math.min(
     9,
     Math.floor((nextPos / 435) * 9) + 1
@@ -172,7 +196,8 @@ export function computeNextTrainState(
     status,
     signalAspect: aspect,
     causalTag: statusReason,
-    rawDelayMins: roundedRawDelay,
+    delaySeconds: delaySec,
+    rawDelayMins: rawDelayMins,
     slackAbsorbedMins: slackAbsorbed,
     netDelayMins: netDelay,
     dynamicETA,
