@@ -52,9 +52,9 @@ export default function CorridorSchematic({
   const switchStatus = getSwitchPointStatus(trains, scenarioPreset as any);
   const isSwitchLocked = switchStatus.isLocked;
 
-  // Group trains by track line
-  const track1Trains = trains.filter((t) => t.line === 'UP' || t.priority < 3);
-  const track2Trains = trains.filter((t) => t.line === 'DOWN' || t.priority === 3);
+  // Group trains by track line (strictly mutually exclusive)
+  const track1Trains = trains.filter((t) => t.priority < 3 && !t.number.includes('BOXN'));
+  const track2Trains = trains.filter((t) => t.priority === 3 || t.number.includes('BOXN'));
 
   return (
     <section className="w-full bg-cardbg/80 border border-borderzinc/80 rounded-xl p-5 lg:p-6 backdrop-blur-md flex flex-col justify-between shadow-2xl relative overflow-hidden">
