@@ -193,6 +193,11 @@ export default function Page() {
     setIsMuted(muted);
   };
 
+  const blocksRef = useRef(blocks);
+  useEffect(() => {
+    blocksRef.current = blocks;
+  }, [blocks]);
+
   // Deterministic Telemetry Physics Loop (runs every 1.5s)
   useEffect(() => {
     const timer = setInterval(() => {
@@ -205,7 +210,8 @@ export default function Page() {
             incidentsRef.current,
             1.5,
             simSpeedMultiplierRef.current,
-            slackBufferMinsRef.current
+            slackBufferMinsRef.current,
+            blocksRef.current
           )
         )
       );

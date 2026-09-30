@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Trak // Dynamic Train ETA Forecast',
+  title: 'Trak - Dynamic Train ETA Forecast',
   description:
     'Dynamic Forecast of Expected Time of Arrival (ETA) for Coaching Trains using Block Signaling Telemetry & Timetable Recovery Slack Subtraction.',
 };
