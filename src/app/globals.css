@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-void: 9 10 15;
+    --font-mono: 'JetBrains Mono', 'Geist Mono', monospace;
+    --font-sans: 'Geist', 'Inter', sans-serif;
+  }
+
+  body {
+    background-color: #090a0f;
+    color: #e2e8f0;
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Tabular Mono Numbers for Precision Telemetry */
+.font-mono-numbers {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Hairline Grid Overlay Background */
+.bg-rail-grid {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Subtle Glowing Borders */
+.border-glow-cyan {
+  box-shadow: 0 0 15px -3px rgba(6, 182, 212, 0.25);
+}
+
+.border-glow-amber {
+  box-shadow: 0 0 15px -3px rgba(245, 158, 11, 0.25);
+}
+
+.border-glow-red {
+  box-shadow: 0 0 15px -3px rgba(239, 68, 68, 0.3);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #090a0f;
+}
+::-webkit-scrollbar-thumb {
+  background: #232633;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3b3f54;
+}
+
+/* Train Header Locomotive Glide */
+@keyframes locoGlideLoop {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(1200%); }
+}
+
+.animate-loco-loop {
+  animation: locoGlideLoop 20s linear infinite;
+}
+
+/* Rotating Train Wheels */
+@keyframes spinWheel {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-wheel {
+  animation: spinWheel 0.5s linear infinite;
+  transform-origin: center;
+}
+
+/* Continuously Scrolling Track Bed under centered train (Relaxed Speed) */
+@keyframes scrollTrackBed {
+  0% {
+    background-position: 0px 0;
+  }
+  100% {
+    background-position: -24px 0;
+  }
+}
+
+.animate-scroll-track {
+  animation: scrollTrackBed 2.5s linear infinite;
+}
+
+/* Train Body Subtle Suspension Glide */
+@keyframes trainSuspension {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-0.5px);
+  }
+}
+
+.animate-train-vibrate {
+  animation: trainSuspension 2.0s ease-in-out infinite;
+}
+
+
