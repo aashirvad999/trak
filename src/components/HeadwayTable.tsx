@@ -38,8 +38,8 @@ export default function HeadwayTable({ trains, onSelectTrain, slackBufferMins }:
             <thead>
               <tr className="text-[11px] text-zinc-500 border-b border-borderzinc/50 pb-2">
                 <th className="py-2.5 font-normal">Train &amp; Line</th>
-                <th className="py-2.5 px-2 font-normal">Active Block</th>
-                <th className="py-2.5 px-2 font-normal text-right">Speed</th>
+                <th className="py-2.5 px-2 font-normal">Block No</th>
+                <th className="py-2.5 px-2 font-normal text-right">Speed (km/h)</th>
                 <th className="py-2.5 px-2 font-normal text-right">Sched.</th>
                 <th className="py-2.5 px-2 font-normal text-right">Dynamic ETA</th>
                 <th className="py-2.5 pl-3 font-normal">Real-Time Bottleneck Cause</th>
@@ -90,31 +90,26 @@ export default function HeadwayTable({ trains, onSelectTrain, slackBufferMins }:
                       </div>
                     </td>
 
-                    {/* Active Block */}
+                    {/* Block No */}
                     <td className="py-3.5 px-2 text-zinc-400">
                       <span className="px-1.5 py-0.5 rounded bg-void/80 border border-borderzinc/60 text-[11px]">
-                        {t.currentBlockId}
+                        {parseInt(t.currentBlockId.replace(/^[^\d]+/, ''), 10) || t.currentBlockId}
                       </span>
                     </td>
 
-                    {/* Speed */}
+                    {/* Speed (km/h) */}
                     <td className="py-3.5 px-2 text-right">
-                      <div className="flex flex-col items-end">
-                        <span
-                          className={`font-semibold ${
-                            isHalted
-                              ? 'text-rose-400 animate-pulse'
-                              : isCaution
-                              ? 'text-amber-400'
-                              : 'text-zinc-200'
-                          }`}
-                        >
-                          {Math.round(t.currentSpeedKmH)} km/h
-                        </span>
-                        <span className="text-[10px] text-zinc-500">
-                          Target {t.maxTargetSpeedKmH}
-                        </span>
-                      </div>
+                      <span
+                        className={`font-semibold ${
+                          isHalted
+                            ? 'text-rose-400 animate-pulse'
+                            : isCaution
+                            ? 'text-amber-400'
+                            : 'text-zinc-200'
+                        }`}
+                      >
+                        {Math.round(t.currentSpeedKmH)}
+                      </span>
                     </td>
 
                     {/* Scheduled Time */}
